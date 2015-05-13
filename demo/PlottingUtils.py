@@ -61,8 +61,8 @@ def plot_waveform(samples, width=6, height=4, stereo=False):
         #channel_2.set_xlim(0,song_length) # todo
         channel_2.plot(samples[:,1]);
 
-    plt.show();
-    plt.clf();
+    _ = plt.show();
+    _ = plt.clf();
 
 
 
