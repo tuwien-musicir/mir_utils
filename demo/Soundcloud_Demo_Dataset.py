@@ -23,8 +23,9 @@ class SoundcloudDemodatasetHandler(object):
 
     def __init__(self, local_dataset_path, lazy=False):
 
-        self.local_dataset_path  = local_dataset_path
-        self.metadata = pd.read_csv(os.path.join(self.local_dataset_path, "soundcloud_dataset_metadata.csv"), sep=",", engine="python")
+        if not local_dataset_path == None:
+            self.local_dataset_path  = local_dataset_path
+            self.metadata = pd.read_csv(os.path.join(self.local_dataset_path, "soundcloud_dataset_metadata.csv"), sep=",", engine="python")
         self.features = {}
         self.lazy_loading = lazy
 
@@ -50,6 +51,9 @@ class SoundcloudDemodatasetHandler(object):
         self.features[feature_set]["ids"]    = data.iloc[:,-1].values
 
     def load_all_features(self):
+
+        #feature_sets = SUPPORTED_FEATURE_SETS
+        feature_sets = ['rp', 'rh', 'ssd']
 
         for f_set in feature_sets:
             self.load_featureset(f_set)
