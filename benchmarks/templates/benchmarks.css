@@ -1,0 +1,54 @@
+
+
+table.resulttable {
+	border-collapse: collapse;
+	padding: 15 0 15 0px;
+	font-family: tahoma;
+	font-size: 11pt;
+}
+
+tr.datasetname {
+	padding: 15px;
+	border-top: 15px solid white;
+	border-bottom: 5px solid white;
+}
+
+tr.datasetname a:link {
+    color: white;
+}
+
+tr.datasetname a:visited  {
+    color: white;
+}
+
+tr.datasetname a:hover  {
+    color: lightgray;
+}
+
+tr.datasetname th {
+	background-color: #77773c;
+	padding: 5px 10px 5px 10px;
+	color: white;
+	
+}
+
+table.resulttable td {
+	padding: 2px;
+}
+
+td.classifiername {
+	font-weight: bold;
+	font-style: italic;
+	text-align: center;
+	border-left: 1px dotted gray;
+	padding: 5px 20px 5px 20px !important;
+	background-color: #e0e0e0;
+}
+
+td.resultvalue {
+	text-align: center;
+	padding: 2px 20px 2px 20px !important;
+	border-left: 1px dotted gray;
+}
+
+tr:nth-child(even) {background-color: #f2f2f2}
