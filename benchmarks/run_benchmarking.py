@@ -18,7 +18,9 @@ from sklearn.naive_bayes import GaussianNB
 
 BENCHMARK_DIR_NAME = "D:/MIR/benchmarks"
 
-DATASETS = ["D:/Research/Data/MIR/GTZAN",
+DATASETS = [
+            "D:/Research/Data/MIR/seyerlehner_unique",
+            "D:/Research/Data/MIR/GTZAN",
             "D:/Research/Data/MIR/ISMIR_Genre",
             "D:/Research/Data/MIR/ISMIR_Rhythm",
             "D:/Research/Data/MIR/LatinMusicDatabase",
@@ -27,13 +29,17 @@ DATASETS = ["D:/Research/Data/MIR/GTZAN",
 
 RP_FEATURES      = ['rp','ssd','rh','tssd','trh','mvd']
 MARSYAS_FEATURES = ["ZeroCrossings", "Centroid", "Rolloff", "Flux", "MFCC", "Chroma", "SCF", "SFM", "LSP", "LPCC"]
+LIBROSA_FEATURES = ["rmse", "tonnetz", "spec_bandwidth", "spec_contrast", "tempo"]
 
-COMBINATIONS = [['rp','ssd'],['rp','tssd'],['rp','trh','tssd'],['ssd','rh'],['rp','mvd'],
+COMBINATIONS = [['rp','ssd'],['rp','ssd','rh'],['rp','tssd'],['rp','trh','tssd'],['ssd','rh'],['rp','mvd'],
                 ["ZeroCrossings", "Centroid", "Rolloff", "Flux", "MFCC"], ["Centroid", "Rolloff", "Flux"],
+                ["rp", "ZeroCrossings", "Centroid", "Rolloff", "Flux", "MFCC"], ['rh', 'MFCC', 'Chroma'],
                 ['rp','MFCC'], ['rh', 'MFCC'], ['MFCC', 'Chroma'], ["rp", "Chroma"], ["rp", "MFCC", "Chroma"],
                 ["LSP", "rp"], ["LSP", "ssd"]]
+
 COMBINATIONS.extend([[feat] for feat in RP_FEATURES])
 COMBINATIONS.extend([[feat] for feat in MARSYAS_FEATURES])
+#COMBINATIONS.extend([[feat] for feat in LIBROSA_FEATURES])
 
 
 # CLASSIFIERS = {"NB": GaussianNB()}
@@ -178,10 +184,11 @@ def run_classifications(work_dir_path, work_dir_features_path, work_dir_results_
     import cPickle
     import numpy as np
 
-    from sklearn.preprocessing import LabelEncoder, StandardScaler
+    from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
     from sklearn.cross_validation import StratifiedKFold
     
-    scaler = StandardScaler()
+    #scaler = StandardScaler()
+    scaler = MinMaxScaler()
     
     # load partitions
     with open("%s/stratified_10fold.pkl" % (work_dir_path), 'rb') as fid:
@@ -453,6 +460,80 @@ def write_feature_summary(result_tables, global_output_path):
         f = open("%s/feature_summary_%s.html" % (global_output_path, feat_name), 'w')
         f.write(html)
         f.close()
+        
+        
+def extract_librosa_features(input_audio_path, work_dir_features_path, filelist_path):
+    
+    import pandas as pd
+    import librosa 
+    import numpy as np
+    
+    filelist = pd.read_csv(filelist_path, header=None, sep="\t")
+    filelist.columns = ["filename", "label"]
+    
+    
+    feat = {}
+    feat["rmse"]           = []
+    feat["tonnetz"]        = []
+    feat["spec_bandwidth"] = []
+    feat["spec_contrast"]  = []
+    feat["tempo"]          = []
+    
+    
+    i = 1
+    
+    
+    for f_name in filelist["filename"]:
+        
+        print "[%d of %d] %s" % (i, filelist["filename"].shape[0], f_name)
+        i += 1
+        
+        f_name = "%s/%s" % (input_audio_path,f_name)
+        
+        y, sr      = librosa.load(f_name)
+        
+        # RMSSE
+        rmse = librosa.feature.rmse(y=y)
+        feat["rmse"].append(rmse)
+        
+        # TONNETZ
+        y_harmonic = librosa.effects.harmonic(y)
+        tonnetz    = librosa.feature.tonnetz(y=y_harmonic, sr=sr)
+        vec_mean   = np.mean(tonnetz, axis=1)
+        vec_std    = np.std(tonnetz, axis=1)
+        vec        = np.concatenate([vec_mean,vec_std], axis=0)
+        feat["tonnetz"].append(vec)
+        
+        # spectral_bandwidth
+        spectral_bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sr)
+        vec_mean   = np.mean(spectral_bandwidth)
+        vec_std    = np.std(spectral_bandwidth)
+        vec        = np.asarray([vec_mean,vec_std])
+        feat["spec_bandwidth"].append(vec)
+    
+        # spectral_contrast
+        S = np.abs(librosa.stft(y))
+        contrast = librosa.feature.spectral_contrast(S=S, sr=sr)
+        vec_mean   = np.mean(contrast, axis=1)
+        vec_std    = np.std(contrast, axis=1)
+        vec        = np.concatenate([vec_mean,vec_std], axis=0)
+        feat["spec_contrast"].append(vec)
+        
+        # tempo
+        onset_env  = librosa.onset.onset_strength(y, sr=sr)
+        tempo      = librosa.beat.estimate_tempo(onset_env, sr=sr)
+        feat["tempo"].append(tempo)
+        
+    for feat_name in feat.keys():
+        
+        npz_dest_path = "%s/features.%s" % (work_dir_features_path,feat_name)
+    
+        np.savez(npz_dest_path, 
+             data      = feat[feat_name], 
+             filenames = filelist["filename"].values,
+             labels    = filelist["label"].values)
+        
+
 
 if __name__ == '__main__':
     
@@ -472,7 +553,9 @@ if __name__ == '__main__':
 
         # features
         output_feature_path_rpextract  = "%s/features/rp_extract_python/rp_extract" % (dataset_path)
-        output_feature_path_marsyas    = "%s/features/marsyas/marsyas.arff" % (dataset_path)
+        output_feature_path_marsyas    = "%s/features/marsyas" % (dataset_path)
+        output_feature_filename_marsyas= "%s/features/marsyas/marsyas.arff" % (dataset_path)
+        output_feature_path_librosa    = "%s/features/librosa" % (dataset_path)
 
         # config
         config_dir_path                = "%s/datasets/%s/config" % (BENCHMARK_DIR_NAME, dataset_name)
@@ -493,6 +576,8 @@ if __name__ == '__main__':
         if not os.path.exists(work_dir_features_path):        os.makedirs(work_dir_features_path)
         if not os.path.exists(work_dir_results_path):         os.makedirs(work_dir_results_path)
         if not os.path.exists(dataset_output_results_path):   os.makedirs(dataset_output_results_path)
+        if not os.path.exists(output_feature_path_librosa):   os.makedirs(output_feature_path_librosa)
+        if not os.path.exists(output_feature_path_marsyas):   os.makedirs(output_feature_path_marsyas)
         
         
         # ========================
@@ -500,14 +585,17 @@ if __name__ == '__main__':
         # ========================
          
         # create filelist
+        # ===============
         filelist = create_filelists(input_audio_path, config_dir_path)
          
 
         # extract features
+        # ================
+        
+        # = rp_extract =
         if not (os.path.exists("%s.ssd" % (output_feature_path_rpextract)) and SKIP_EXISTING_FILES): 
         
             print "* extracting rp_extract: %s" % (dataset_name)
-            # rp_extract
             rp_extract.extract_all_files_in_path(input_audio_path, 
                                                  output_feature_path_rpextract,
                                                  RP_FEATURES, 
@@ -516,25 +604,27 @@ if __name__ == '__main__':
                                                  verbose=False,
                                                  filelist_path="%s/filelist.txt" % (config_dir_path))
             
-            # marsyas
             
             
-        if not (os.path.exists(output_feature_path_marsyas) and SKIP_EXISTING_FILES):
+        # = marsyas =
+        if not (os.path.exists(output_feature_filename_marsyas) and SKIP_EXISTING_FILES):
             
             print "* extracting marsyas: %s" % (dataset_name)
-            marsyas_arff_filename = output_feature_path_marsyas.replace("\\","/").split("/")[-1]
-            output_feature_path_marsyas_dir = output_feature_path_marsyas.replace("\\","/").replace(marsyas_arff_filename,"")
+            marsyas_arff_filename = output_feature_filename_marsyas.replace("\\","/").split("/")[-1]
+            output_feature_path_marsyas_dir = output_feature_filename_marsyas.replace("\\","/").replace(marsyas_arff_filename,"")
             
             if not os.path.exists(output_feature_path_marsyas_dir):   os.makedirs(output_feature_path_marsyas_dir)
             cmd = [MARSYAS_BEXTRACT_BIN, 
                    "-sv", "-l", "30", "-fe", "-mfcc", "-chroma", "-ctd", "-rlf", "-flx", "-zcrs", "-sfm", "-scf", "-lsp", "-lpcc",
                    "%s/filelist_full_path.txt" % (config_dir_path),
-                   "-w", output_feature_path_marsyas]
+                   "-w", output_feature_filename_marsyas]
             
-            print cmd
             subprocess.call(cmd)
-            # bextract  -sv -l 30 -fe -mfcc -chroma -ctd -rlf -flx -zcrs -sfm -scf -lsp -lpcc D:\MIR\benchmarks\datasets\GTZAN\config\filelist_full_path.txt -w E:\test\GTZAN.arff 
-            
+             
+#         if not (os.path.exists("%s/librosa_features.npz" % (output_feature_path_librosa)) and SKIP_EXISTING_FILES):
+#             extract_librosa_features(input_audio_path,
+#                                      work_dir_features_path,
+#                                      filelist_path="%s/filelist.txt" % (config_dir_path))
         
         # create npzs
         
@@ -548,7 +638,7 @@ if __name__ == '__main__':
                 create_npz_from_rpextract_format(feature_file_path, npz_dest_path, config_dir_path)
                 
         # from marsyas
-        create_npz_from_marsyas_arff(output_feature_path_marsyas, work_dir_features_path, config_dir_path)
+        create_npz_from_marsyas_arff(output_feature_filename_marsyas, work_dir_features_path, config_dir_path)
         
         # create consistent stratified partitions
         create_partitions(work_dir_path)
